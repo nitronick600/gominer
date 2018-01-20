@@ -143,36 +143,43 @@ func (sc *StratumClient) subscribeToStratumJobNotifications() {
 		sj := stratumJob{}
 
 		sj.ExtraNonce2.Size = sc.extranonce2Size
+		log.Printf("enonce2 %d", sc.extranonce2Size)
 
+		log.Printf("Params: %v", params)
 		var ok bool
 		var err error
 		if sj.JobID, ok = params[0].(string); !ok {
 			log.Println("ERROR Wrong job_id parameter supplied by stratum server")
 			return
 		}
+		log.Printf("jobid: %s", sj.JobID)
 		if sj.PrevHash, err = stratum.HexStringToBytes(params[1]); err != nil {
 			log.Println("ERROR Wrong prevhash parameter supplied by stratum server")
 			return
 		}
+		log.Printf("PrevHash: %s", params[1])
 		if sj.Coinbase1, err = stratum.HexStringToBytes(params[2]); err != nil {
 			log.Println("ERROR Wrong coinb1 parameter supplied by stratum server")
 			return
 		}
+		log.Printf("Coinbase1: %s", params[2])
 		if sj.Coinbase2, err = stratum.HexStringToBytes(params[3]); err != nil {
 			log.Println("ERROR Wrong coinb2 parameter supplied by stratum server")
 			return
 		}
+		log.Printf("Coinbase2: %s", params[3])
 
 		//Convert the merklebranch parameter
 		merklebranch, ok := params[4].([]interface{})
 		if !ok {
-			log.Println("ERROR Wrong merkle_branch parameter supplied by stratum server")
-			return
+			log.Printf("ERROR Wrong merkle_branch parameter supplied by stratum server: %s", params[4])
 		}
+		log.Printf("merklebranch: %s", merklebranch)
+
 		sj.MerkleBranch = make([][]byte, len(merklebranch), len(merklebranch))
 		for i, branch := range merklebranch {
 			if sj.MerkleBranch[i], err = stratum.HexStringToBytes(branch); err != nil {
-				log.Println("ERROR Wrong merkle_branch parameter supplied by stratum server")
+				log.Printf("ERROR Wrong merkle_branch parameter supplied by stratum server. %s", branch)
 				return
 			}
 		}
@@ -181,14 +188,17 @@ func (sc *StratumClient) subscribeToStratumJobNotifications() {
 			log.Println("ERROR Wrong version parameter supplied by stratum server")
 			return
 		}
+		log.Printf("Version: %s", sj.Version)
 		if sj.NBits, ok = params[6].(string); !ok {
 			log.Println("ERROR Wrong nbits parameter supplied by stratum server")
 			return
 		}
+		log.Printf("NBits: %s", sj.NBits)
 		if sj.NTime, err = stratum.HexStringToBytes(params[7]); err != nil {
 			log.Println("ERROR Wrong ntime parameter supplied by stratum server")
 			return
 		}
+		log.Printf("NTime: %s", sj.NTime)
 		if sj.CleanJobs, ok = params[8].(bool); !ok {
 			log.Println("ERROR Wrong clean_jobs parameter supplied by stratum server")
 			return
