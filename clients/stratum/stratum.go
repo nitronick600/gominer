@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"errors"
+	"log"
 	"net"
 	"sync"
 	"time"
@@ -195,5 +196,6 @@ func (c *Client) Call(serviceMethod string, args []string) (reply interface{}, e
 		return
 	}
 	err, _ = reply.(error)
+	log.Printf("%s: %s", serviceMethod, reply)
 	return
 }
