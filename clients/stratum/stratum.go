@@ -148,7 +148,7 @@ func (c *Client) registerRequest(requestID uint64) (cb chan interface{}) {
 	if c.pendingCalls == nil {
 		c.pendingCalls = make(map[uint64]chan interface{})
 	}
-	cb = make(chan interface{})
+	cb = make(chan interface{}, 10000)
 	c.pendingCalls[requestID] = cb
 	return
 }
