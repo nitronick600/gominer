@@ -4,6 +4,8 @@ import (
 	"log"
 	"time"
 
+	"encoding/binary"
+	"encoding/hex"
 	"github.com/robvanmieghem/go-opencl/cl"
 	"github.com/robvanmieghem/gominer/clients"
 	"github.com/robvanmieghem/gominer/mining"
@@ -184,6 +186,10 @@ func (miner *singleDeviceMiner) mine() {
 		}
 		//Check if match found
 		if nonceOut[0] != 0 || nonceOut[1] != 0 || nonceOut[2] != 0 || nonceOut[3] != 0 || nonceOut[4] != 0 || nonceOut[5] != 0 || nonceOut[6] != 0 || nonceOut[7] != 0 {
+			nonceVal := uint64(0)
+			binary.LittleEndian.PutUint64(nonceOut[:], nonceVal)
+			str := hex.EncodeToString(nonceOut[:])
+			log.Printf("Nonceval: %s", str)
 			log.Println(miner.MinerID, "-", "Yay, solution found!")
 
 			// Copy nonce to a new header.
