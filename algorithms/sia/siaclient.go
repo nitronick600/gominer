@@ -12,9 +12,9 @@ import (
 )
 
 // NewClient creates a new SiadClient given a '[stratum+tcp://]host:port' connectionstring
-func NewClient(connectionstring, pooluser string) (sc clients.Client) {
+func NewClient(connectionstring, pooluser string, poolPass string) (sc clients.Client) {
 	if strings.HasPrefix(connectionstring, "stratum+tcp://") {
-		sc = &StratumClient{connectionstring: strings.TrimPrefix(connectionstring, "stratum+tcp://"), User: pooluser}
+		sc = &StratumClient{connectionstring: strings.TrimPrefix(connectionstring, "stratum+tcp://"), User: pooluser, Password: poolPass}
 	} else {
 		s := SiadClient{}
 		s.siadurl = "http://" + connectionstring + "/miner/header"

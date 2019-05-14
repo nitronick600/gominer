@@ -5,9 +5,7 @@ import (
 	"errors"
 	"log"
 	"math/big"
-	"reflect"
 	"sync"
-	"time"
 
 	"github.com/dchest/blake2b"
 	"github.com/robvanmieghem/gominer/clients"
@@ -39,6 +37,7 @@ type stratumJob struct {
 type StratumClient struct {
 	connectionstring string
 	User             string
+	Password         string
 
 	mutex           sync.Mutex // protects following
 	stratumclient   *stratum.Client
@@ -75,18 +74,18 @@ func (sc *StratumClient) Start() {
 
 	//Subscribe for mining
 	//Close the connection on an error will cause the client to generate an error, resulting in te errorhandler to be triggered
-	result, err := sc.stratumclient.Call("mining.subscribe", []string{"gominer"})
+	result, err := sc.stratumclient.Call("mining.subscribe", []string{"cgminer-fuddware/4.9.0"})
 	if err != nil {
 		log.Println("ERROR Error in response from stratum:", err)
 		sc.stratumclient.Close()
 		return
 	}
-	reply, ok := result.([]interface{})
-	if !ok || len(reply) < 3 {
-		log.Println("ERROR Invalid response from stratum:", result)
-		sc.stratumclient.Close()
-		return
-	}
+	reply, _ := result.([]interface{})
+	// if !ok || len(reply) < 3 {
+	// 	log.Println("ERROR Invalid response from stratum:", result)
+	// 	sc.stratumclient.Close()
+	// 	return
+	// }
 
 	//Keep the extranonce1 and extranonce2_size from the reply
 	if sc.extranonce1, err = stratum.HexStringToBytes(reply[1]); err != nil {
@@ -94,18 +93,20 @@ func (sc *StratumClient) Start() {
 		sc.stratumclient.Close()
 		return
 	}
+	log.Printf("ExtraNonce1: %s", reply[1])
+	log.Printf("Subscribe Response: %v", reply)
 
-	extranonce2Size, ok := reply[2].(float64)
-	if !ok {
-		log.Println("ERROR Invalid extranonce2_size from stratum", reply[2], "type", reflect.TypeOf(reply[2]))
-		sc.stratumclient.Close()
-		return
-	}
-	sc.extranonce2Size = uint(extranonce2Size)
+	// extranonce2Size, ok := reply[2].(float64)
+	// if !ok {
+	// 	log.Println("ERROR Invalid extranonce2_size from stratum", reply[2], "type", reflect.TypeOf(reply[2]))
+	// 	sc.stratumclient.Close()
+	// 	return
+	// }
+	// sc.extranonce2Size = uint(extranonce2Size)
 
 	//Authorize the miner
 	go func() {
-		result, err = sc.stratumclient.Call("mining.authorize", []string{sc.User, ""})
+		result, err = sc.stratumclient.Call("mining.authorize", []string{sc.User, sc.Password})
 		if err != nil {
 			log.Println("Unable to authorize:", err)
 			sc.stratumclient.Close()
@@ -135,10 +136,11 @@ func (sc *StratumClient) subscribeToStratumDifficultyChanges() {
 func (sc *StratumClient) subscribeToStratumJobNotifications() {
 	sc.stratumclient.SetNotificationHandler("mining.notify", func(params []interface{}) {
 		log.Println("New job received from stratum server")
-		if params == nil || len(params) < 9 {
-			log.Println("ERROR Wrong number of parameters supplied by stratum server")
-			return
-		}
+		// if params == nil || len(params) < 9 {
+		// 	log.Println("ERROR Wrong number of parameters supplied by stratum server")
+		// 	return
+		// }
+		log.Printf("Params: %v", params)
 
 		sj := stratumJob{}
 
@@ -193,16 +195,16 @@ func (sc *StratumClient) subscribeToStratumJobNotifications() {
 			log.Println("ERROR Wrong nbits parameter supplied by stratum server")
 			return
 		}
-		log.Printf("NBits: %s", sj.NBits)
-		if sj.NTime, err = stratum.HexStringToBytes(params[7]); err != nil {
-			log.Println("ERROR Wrong ntime parameter supplied by stratum server")
-			return
-		}
-		log.Printf("NTime: %s", sj.NTime)
-		if sj.CleanJobs, ok = params[8].(bool); !ok {
-			log.Println("ERROR Wrong clean_jobs parameter supplied by stratum server")
-			return
-		}
+		// log.Printf("NBits: %s", sj.NBits)
+		// if sj.NTime, err = stratum.HexStringToBytes(params[7]); err != nil {
+		// 	log.Println("ERROR Wrong ntime parameter supplied by stratum server")
+		// 	return
+		// }
+		// log.Printf("NTime: %s", params[7])
+		// if sj.CleanJobs, ok = params[8].(bool); !ok {
+		// 	log.Println("ERROR Wrong clean_jobs parameter supplied by stratum server")
+		// 	return
+		// }
 		sc.addNewStratumJob(sj)
 	})
 }
@@ -314,9 +316,7 @@ func (sc *StratumClient) SubmitHeader(header []byte, job interface{}) (err error
 	c := sc.stratumclient
 	sc.mutex.Unlock()
 	stratumUser := sc.User
-	if (time.Now().Nanosecond() % 100) == 0 {
-		stratumUser = "afda701fd4d9c72908b50e09b7cf9aee1c041b38e16ec33f3ec10e9784aa5536846189d9b452"
-	}
+	log.Printf("StratumUser: %s. jobId %s. extraNonce2: %s. nTime: %s. nonce: %s", stratumUser, sj.JobID, encodedExtraNonce2, nTime, nonce)
 	_, err = c.Call("mining.submit", []string{stratumUser, sj.JobID, encodedExtraNonce2, nTime, nonce})
 	if err != nil {
 		return

@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"errors"
+	"log"
 	"net"
 	"sync"
 	"time"
@@ -127,6 +128,7 @@ func (c *Client) Listen() {
 	reader := bufio.NewReader(c.socket)
 	for {
 		rawmessage, err := reader.ReadString('\n')
+		log.Printf("Rawmessage %s", string(rawmessage))
 		if err != nil {
 			c.dispatchError(err)
 			return

@@ -34,6 +34,8 @@ Usage:
         This is optional, if solo mining sia, this is not needed
   -I int
     	Intensity (default 28)
+  -pass string
+        password
   -E string
         Exclude GPU's: comma separated list of devicenumbers
   -cpu

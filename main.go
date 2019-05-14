@@ -27,6 +27,7 @@ func main() {
 	flag.IntVar(&intensity, "I", intensity, "Intensity")
 	host := flag.String("url", "localhost:9980", "daemon or server host and port, for stratum servers, use `stratum+tcp://<host>:<port>`")
 	pooluser := flag.String("user", "payoutaddress.rigname", "username, most stratum servers take this in the form [payoutaddress].[rigname]")
+	poolPass := flag.String("pass", "test", "password")
 	excludedGPUs := flag.String("E", "", "Exclude GPU's: comma separated list of devicenumbers")
 	flag.Parse()
 
@@ -78,7 +79,7 @@ func main() {
 
 	var miner mining.Miner
 	log.Println("Starting SIA mining")
-	c := sia.NewClient(*host, *pooluser)
+	c := sia.NewClient(*host, *pooluser, *poolPass)
 
 	miner = &sia.Miner{
 		ClDevices:       miningDevices,
