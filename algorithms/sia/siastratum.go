@@ -156,7 +156,7 @@ func (sc *StratumClient) subscribeToStratumJobNotifications() {
 		}
 		log.Printf("jobid: %s", sj.JobID)
 		if sj.PrevHash, err = stratum.HexStringToBytes(params[1]); err != nil {
-			log.Println("ERROR Wrong prevhash parameter supplied by stratum server")
+			//log.Println("ERROR Wrong prevhash parameter supplied by stratum server")
 			return
 		}
 		log.Printf("PrevHash: %s", params[1])
@@ -181,19 +181,19 @@ func (sc *StratumClient) subscribeToStratumJobNotifications() {
 		sj.MerkleBranch = make([][]byte, len(merklebranch), len(merklebranch))
 		for i, branch := range merklebranch {
 			if sj.MerkleBranch[i], err = stratum.HexStringToBytes(branch); err != nil {
-				log.Printf("ERROR Wrong merkle_branch parameter supplied by stratum server. %s", branch)
-				return
+				//log.Printf("ERROR Wrong merkle_branch parameter supplied by stratum server. %s", branch)
+				//return
 			}
 		}
 
 		if sj.Version, ok = params[5].(string); !ok {
-			log.Println("ERROR Wrong version parameter supplied by stratum server")
-			return
+			//log.Println("ERROR Wrong version parameter supplied by stratum server")
+			//return
 		}
 		log.Printf("Version: %s", sj.Version)
 		if sj.NBits, ok = params[6].(string); !ok {
-			log.Println("ERROR Wrong nbits parameter supplied by stratum server")
-			return
+			//log.Println("ERROR Wrong nbits parameter supplied by stratum server")
+			//return
 		}
 		// log.Printf("NBits: %s", sj.NBits)
 		// if sj.NTime, err = stratum.HexStringToBytes(params[7]); err != nil {
@@ -205,7 +205,7 @@ func (sc *StratumClient) subscribeToStratumJobNotifications() {
 		// 	log.Println("ERROR Wrong clean_jobs parameter supplied by stratum server")
 		// 	return
 		// }
-		sc.addNewStratumJob(sj)
+		//sc.addNewStratumJob(sj)
 	})
 }
 

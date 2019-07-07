@@ -76,8 +76,8 @@ func (m *Miner) createWork() {
 		_, header, deprecationChannel, job, err := m.Client.GetHeaderForWork()
 
 		if err != nil {
-			log.Println("ERROR fetching work -", err)
-			time.Sleep(1000 * time.Millisecond)
+			//log.Println("ERROR fetching work -", err)
+			time.Sleep(5000 * time.Millisecond)
 			continue
 		}
 

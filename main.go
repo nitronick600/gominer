@@ -9,6 +9,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/robvanmieghem/gominer/algorithms/equihash"
+	"github.com/robvanmieghem/gominer/clients"
+
 	"github.com/robvanmieghem/go-opencl/cl"
 	"github.com/robvanmieghem/gominer/algorithms/sia"
 	"github.com/robvanmieghem/gominer/mining"
@@ -29,6 +32,7 @@ func main() {
 	pooluser := flag.String("user", "payoutaddress.rigname", "username, most stratum servers take this in the form [payoutaddress].[rigname]")
 	poolPass := flag.String("pass", "test", "password")
 	excludedGPUs := flag.String("E", "", "Exclude GPU's: comma separated list of devicenumbers")
+	minerType := flag.String("type", "sia", "The type of miner to start. one of: sia, 144_5, 125_4, 200_9, 192_7")
 	flag.Parse()
 
 	if *printVersion {
@@ -78,8 +82,15 @@ func main() {
 	var hashRateReportsChannel = make(chan *mining.HashRateReport, nrOfMiningDevices*10)
 
 	var miner mining.Miner
-	log.Println("Starting SIA mining")
-	c := sia.NewClient(*host, *pooluser, *poolPass)
+	log.Println("Starting mining")
+	var c clients.Client
+	if *minerType == "sia" {
+		c = sia.NewClient(*host, *pooluser, *poolPass)
+	} else if *minerType == "125_4" {
+		c = equihash.NewClient(*host, *poolUser, *poolPass)
+	} else {
+		fmt.Errorf("Unknown miner type: %s", *minerType)
+	}
 
 	miner = &sia.Miner{
 		ClDevices:       miningDevices,
@@ -101,10 +112,10 @@ func main() {
 		fmt.Print("\r")
 		var totalHashRate float64
 		for minerID, hashrate := range hashRateReports {
-			fmt.Printf("%d-%.1f ", minerID, hashrate)
+			fmt.Printf("%d-%.4f ", minerID, hashrate)
 			totalHashRate += hashrate
 		}
-		fmt.Printf("Total: %.1f MH/s  ", totalHashRate)
+		fmt.Printf("Total: %.4f MH/s  ", totalHashRate)
 
 	}
 }
