@@ -4,7 +4,6 @@ import (
 	"log"
 	"time"
 
-	"github.com/robvanmieghem/go-opencl/cl"
 	"github.com/robvanmieghem/gominer/clients"
 	"github.com/robvanmieghem/gominer/mining"
 )
@@ -18,7 +17,6 @@ type miningWork struct {
 
 // Miner actually mines :-)
 type Miner struct {
-	ClDevices         map[int]*cl.Device
 	HashRateReports   chan *mining.HashRateReport
 	miningWorkChannel chan *miningWork
 	//Intensity defines the GlobalItemSize in a human friendly way, the GlobalItemSize = 2^Intensity
@@ -29,7 +27,6 @@ type Miner struct {
 
 //singleDeviceMiner actually mines on 1 opencl device
 type singleDeviceMiner struct {
-	ClDevice          *cl.Device
 	MinerID           int
 	HashRateReports   chan *mining.HashRateReport
 	miningWorkChannel chan *miningWork
@@ -40,23 +37,7 @@ type singleDeviceMiner struct {
 }
 
 //Mine spawns a seperate miner for each device defined in the CLDevices and feeds it with work
-func (m *Miner) Mine() {
-
-	m.miningWorkChannel = make(chan *miningWork, len(m.ClDevices))
-	go m.createWork()
-	for minerID, device := range m.ClDevices {
-		sdm := &singleDeviceMiner{
-			ClDevice:          device,
-			MinerID:           minerID,
-			HashRateReports:   m.HashRateReports,
-			miningWorkChannel: m.miningWorkChannel,
-			GlobalItemSize:    m.GlobalItemSize,
-			Client:            m.Client,
-		}
-		go sdm.mine()
-
-	}
-}
+func (m *Miner) Mine() {}
 
 const maxUint32 = int64(^uint32(0))
 
@@ -99,113 +80,4 @@ func (m *Miner) createWork() {
 			m.miningWorkChannel <- &miningWork{header, int(i) * m.GlobalItemSize, job}
 		}
 	}
-}
-
-func (miner *singleDeviceMiner) mine() {
-	log.Println(miner.MinerID, "- Initializing", miner.ClDevice.Type(), "-", miner.ClDevice.Name())
-
-	context, err := cl.CreateContext([]*cl.Device{miner.ClDevice})
-	if err != nil {
-		log.Fatalln(miner.MinerID, "-", err)
-	}
-	defer context.Release()
-
-	commandQueue, err := context.CreateCommandQueue(miner.ClDevice, 0)
-	if err != nil {
-		log.Fatalln(miner.MinerID, "-", err)
-	}
-	defer commandQueue.Release()
-
-	program, err := context.CreateProgramWithSource([]string{kernelSource})
-	if err != nil {
-		log.Fatalln(miner.MinerID, "-", err)
-	}
-	defer program.Release()
-
-	err = program.BuildProgram([]*cl.Device{miner.ClDevice}, "")
-	if err != nil {
-		log.Fatalln(miner.MinerID, "-", err)
-	}
-
-	kernel, err := program.CreateKernel("nonceGrind")
-	if err != nil {
-		log.Fatalln(miner.MinerID, "-", err)
-	}
-	defer kernel.Release()
-
-	blockHeaderObj := mining.CreateEmptyBuffer(context, cl.MemReadOnly, 80)
-	defer blockHeaderObj.Release()
-	kernel.SetArgBuffer(0, blockHeaderObj)
-
-	nonceOutObj := mining.CreateEmptyBuffer(context, cl.MemReadWrite, 8)
-	defer nonceOutObj.Release()
-	kernel.SetArgBuffer(1, nonceOutObj)
-
-	localItemSize, err := kernel.WorkGroupSize(miner.ClDevice)
-	if err != nil {
-		log.Fatalln(miner.MinerID, "- WorkGroupSize failed -", err)
-	}
-
-	log.Println(miner.MinerID, "- Global item size:", miner.GlobalItemSize, "(Intensity", miner.Intensity, ")", "- Local item size:", localItemSize)
-
-	log.Println(miner.MinerID, "- Initialized ", miner.ClDevice.Type(), "-", miner.ClDevice.Name())
-
-	nonceOut := make([]byte, 8, 8)
-	if _, err = commandQueue.EnqueueWriteBufferByte(nonceOutObj, true, 0, nonceOut, nil); err != nil {
-		log.Fatalln(miner.MinerID, "-", err)
-	}
-	for {
-		start := time.Now()
-		var work *miningWork
-		continueMining := true
-		select {
-		case work, continueMining = <-miner.miningWorkChannel:
-		default:
-			log.Println(miner.MinerID, "-", "No work ready")
-			work, continueMining = <-miner.miningWorkChannel
-			log.Println(miner.MinerID, "-", "Continuing")
-		}
-		if !continueMining {
-			log.Println("Halting miner ", miner.MinerID)
-			break
-		}
-		//Copy input to kernel args
-		if _, err = commandQueue.EnqueueWriteBufferByte(blockHeaderObj, true, 0, work.Header, nil); err != nil {
-			log.Fatalln(miner.MinerID, "-", err)
-		}
-
-		//Run the kernel
-		if _, err = commandQueue.EnqueueNDRangeKernel(kernel, []int{work.Offset}, []int{miner.GlobalItemSize}, []int{localItemSize}, nil); err != nil {
-			log.Fatalln(miner.MinerID, "-", err)
-		}
-		//Get output
-		if _, err = commandQueue.EnqueueReadBufferByte(nonceOutObj, true, 0, nonceOut, nil); err != nil {
-			log.Fatalln(miner.MinerID, "-", err)
-		}
-		//Check if match found
-		if nonceOut[0] != 0 || nonceOut[1] != 0 || nonceOut[2] != 0 || nonceOut[3] != 0 || nonceOut[4] != 0 || nonceOut[5] != 0 || nonceOut[6] != 0 || nonceOut[7] != 0 {
-			log.Println(miner.MinerID, "-", "Yay, solution found!")
-
-			// Copy nonce to a new header.
-			header := append([]byte(nil), work.Header...)
-			for i := 0; i < 8; i++ {
-				header[i+32] = nonceOut[i]
-			}
-			go func() {
-				if e := miner.Client.SubmitHeader(header, work.Job); e != nil {
-					log.Println(miner.MinerID, "- Error submitting solution -", e)
-				}
-			}()
-
-			//Clear the output since it is dirty now
-			nonceOut = make([]byte, 8, 8)
-			if _, err = commandQueue.EnqueueWriteBufferByte(nonceOutObj, true, 0, nonceOut, nil); err != nil {
-				log.Fatalln(miner.MinerID, "-", err)
-			}
-		}
-
-		hashRate := float64(miner.GlobalItemSize) / (time.Since(start).Seconds() * 1000000)
-		miner.HashRateReports <- &mining.HashRateReport{MinerID: miner.MinerID, HashRate: hashRate}
-	}
-
 }

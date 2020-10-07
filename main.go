@@ -8,24 +8,20 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/robvanmieghem/go-opencl/cl"
 	"github.com/robvanmieghem/gominer/algorithms/sia"
 )
 
 //Version is the released version string of gominer
 var Version = "0.6.2-Dev"
 
-var intensity = 28
-var devicesTypesForMining = cl.DeviceTypeGPU
-
 func main() {
 	log.SetOutput(os.Stdout)
 	printVersion := flag.Bool("v", false, "Show version and exit")
-	useCPU := flag.Bool("cpu", false, "If set, also use the CPU for mining, only GPU's are used by default")
-	flag.IntVar(&intensity, "I", intensity, "Intensity")
+	//useCPU := flag.Bool("cpu", false, "If set, also use the CPU for mining, only GPU's are used by default")
+	//	flag.IntVar(&intensity, "I", intensity, "Intensity")
 	host := flag.String("url", "localhost:9980", "daemon or server host and port, for stratum servers, use `stratum+tcp://<host>:<port>`")
 	pooluser := flag.String("user", "payoutaddress.rigname", "username, most stratum servers take this in the form [payoutaddress].[rigname]")
-	excludedGPUs := flag.String("E", "", "Exclude GPU's: comma separated list of devicenumbers")
+	//excludedGPUs := flag.String("E", "", "Exclude GPU's: comma separated list of devicenumbers")
 	flag.Parse()
 
 	if *printVersion {
@@ -33,43 +29,43 @@ func main() {
 		os.Exit(0)
 	}
 
-	if *useCPU {
-		devicesTypesForMining = cl.DeviceTypeAll
-	}
+	// if *useCPU {
+	// 	devicesTypesForMining = cl.DeviceTypeAll
+	// }
 	//globalItemSize := int(math.Exp2(float64(intensity)))
 
-	platforms, err := cl.GetPlatforms()
-	if err != nil {
-		log.Panic(err)
-	}
+	// platforms, err := cl.GetPlatforms()
+	// if err != nil {
+	// 	log.Panic(err)
+	// }
 
-	clDevices := make([]*cl.Device, 0, 4)
-	for _, platform := range platforms {
-		log.Println("Platform", platform.Name())
-		platormDevices, err := cl.GetDevices(platform, devicesTypesForMining)
-		if err != nil {
-			log.Println(err)
-		}
-		log.Println(len(platormDevices), "device(s) found:")
-		for i, device := range platormDevices {
-			log.Println(i, "-", device.Type(), "-", device.Name())
-			clDevices = append(clDevices, device)
-		}
-	}
+	// clDevices := make([]*cl.Device, 0, 4)
+	// for _, platform := range platforms {
+	// 	log.Println("Platform", platform.Name())
+	// 	platormDevices, err := cl.GetDevices(platform, devicesTypesForMining)
+	// 	if err != nil {
+	// 		log.Println(err)
+	// 	}
+	// 	log.Println(len(platormDevices), "device(s) found:")
+	// 	for i, device := range platormDevices {
+	// 		log.Println(i, "-", device.Type(), "-", device.Name())
+	// 		clDevices = append(clDevices, device)
+	// 	}
+	// }
 
-	if len(clDevices) == 0 {
-		log.Println("No suitable opencl devices found")
-		os.Exit(1)
-	}
+	// if len(clDevices) == 0 {
+	// 	log.Println("No suitable opencl devices found")
+	// 	os.Exit(1)
+	// }
 
-	//Filter the excluded devices
-	miningDevices := make(map[int]*cl.Device)
-	for i, device := range clDevices {
-		if deviceExcludedForMining(i, *excludedGPUs) {
-			continue
-		}
-		miningDevices[i] = device
-	}
+	// //Filter the excluded devices
+	// miningDevices := make(map[int]*cl.Device)
+	// for i, device := range clDevices {
+	// 	if deviceExcludedForMining(i, *excludedGPUs) {
+	// 		continue
+	// 	}
+	// 	miningDevices[i] = device
+	// }
 
 	//nrOfMiningDevices := len(miningDevices)
 	// var hashRateReportsChannel = make(chan *mining.HashRateReport, nrOfMiningDevices*10)
