@@ -14,9 +14,9 @@ import (
 
 // request : A remote method is invoked by sending a request to the remote stratum service.
 type request struct {
-	Method string   `json:"method"`
-	Params []string `json:"params"`
-	ID     uint64   `json:"id"`
+	Method string      `json:"method"`
+	Params interface{} `json:"params"`
+	ID     uint64      `json:"id"`
 }
 
 // response is the stratum server's response on a Request
@@ -127,13 +127,14 @@ func (c *Client) dispatchError(err error) {
 func (c *Client) Listen() {
 	reader := bufio.NewReader(c.socket)
 	for {
-		rawmessage, err := reader.ReadString('\n')
+		rawmessage, err := reader.ReadBytes('\n')
 		if err != nil {
 			c.dispatchError(err)
 			return
 		}
 		r := response{}
-		err = json.Unmarshal([]byte(rawmessage), &r)
+		log.Printf("RECEIVED: %s", string(rawmessage))
+		err = json.Unmarshal(rawmessage, &r)
 		if err != nil {
 			c.dispatchError(err)
 			return
@@ -164,7 +165,7 @@ func (c *Client) cancelRequest(requestID uint64) {
 }
 
 //Call invokes the named function, waits for it to complete, and returns its error status.
-func (c *Client) Call(serviceMethod string, args []string) (reply interface{}, err error) {
+func (c *Client) Call(serviceMethod string, args interface{}) (reply interface{}, err error) {
 	r := request{Method: serviceMethod, Params: args}
 
 	c.seqmutex.Lock()
@@ -180,6 +181,7 @@ func (c *Client) Call(serviceMethod string, args []string) (reply interface{}, e
 	defer c.cancelRequest(r.ID)
 
 	rawmsg = append(rawmsg, []byte("\n")...)
+	log.Printf("SENDING: %s", string(rawmsg))
 	_, err = c.socket.Write(rawmsg)
 	if err != nil {
 		return
@@ -196,6 +198,5 @@ func (c *Client) Call(serviceMethod string, args []string) (reply interface{}, e
 		return
 	}
 	err, _ = reply.(error)
-	log.Printf("%s: %s", serviceMethod, reply)
 	return
 }

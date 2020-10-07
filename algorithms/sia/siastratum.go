@@ -37,6 +37,7 @@ type stratumJob struct {
 type StratumClient struct {
 	connectionstring string
 	User             string
+	Password         string
 
 	mutex           sync.Mutex // protects following
 	stratumclient   *stratum.Client
@@ -59,7 +60,7 @@ func (sc *StratumClient) Start() {
 	sc.stratumclient = &stratum.Client{}
 	//In case of an error, drop the current stratumclient and restart
 	sc.stratumclient.ErrorCallback = func(err error) {
-		log.Println("Error in connection to stratumserver:", err)
+		log.Println("DISCONNECT - Error in connection to stratumserver:", err)
 		sc.stratumclient.Close()
 		sc.Start()
 	}
@@ -71,21 +72,40 @@ func (sc *StratumClient) Start() {
 	log.Println("Connecting to", sc.connectionstring)
 	sc.stratumclient.Dial(sc.connectionstring)
 
+	vRoll := make([]interface{}, 2)
+	vRoll[0] = []string{"version-rolling"}
+	retMap := make(map[string]interface{}, 0)
+	retMap["version-rolling.mask"] = "1fffe000"
+	retMap["version-rolling.min-bit-count"] = 3
+	//retMap["minimum-difficulty.value"] = 16777216
+	vRoll[1] = retMap
+
+	// [["version-rolling"],{"version-rolling.mask":"00c00000","version-rolling.min-bit-count":2}]
+	// mining.configure params: [[version-rolling] map[version-rolling.mask:ffffffff version-rolling.min-bit-count:2]]
+	//out := json.RawMessage("[[\"minimum-difficulty\", \"version-rolling\"],{\"minimum-difficulty.value\": 2048,\"version-rolling.mask\": \"1fffe000\", \"version-rolling.min-bit-count\": 2}]")
+	// [["version-rolling"],{"version-rolling.mask":"1fffe000","version-rolling.min-bit-count":3}]. Response: map[version-rolling:true version-rolling.mask:1fffe000]
+	result, err := sc.stratumclient.Call("mining.configure", vRoll)
+	if err != nil {
+		log.Println("Unable to do mining.configures:", err)
+		sc.stratumclient.Close()
+		return
+	}
+
 	//Subscribe for mining
 	//Close the connection on an error will cause the client to generate an error, resulting in te errorhandler to be triggered
-	result, err := sc.stratumclient.Call("mining.subscribe", []string{"gominer"})
-	log.Printf("mining.subscribe: %s", result)
+	result, err = sc.stratumclient.Call("mining.subscribe", []string{"cgminer/4.10.0"})
 	if err != nil {
 		log.Println("ERROR Error in response from stratum:", err)
 		sc.stratumclient.Close()
 		return
 	}
-	reply, ok := result.([]interface{})
-	if !ok || len(reply) < 2 {
-		log.Println("ERROR Invalid response from stratum:", result)
-		sc.stratumclient.Close()
-		return
-	}
+	reply, _ := result.([]interface{})
+
+	// if !ok || len(reply) < 3 {
+	// 	log.Println("ERROR Invalid response from stratum:", result)
+	// 	sc.stratumclient.Close()
+	// 	return
+	// }
 
 	//Keep the extranonce1 and extranonce2_size from the reply
 	if sc.extranonce1, err = stratum.HexStringToBytes(reply[1]); err != nil {
@@ -93,6 +113,94 @@ func (sc *StratumClient) Start() {
 		sc.stratumclient.Close()
 		return
 	}
+	log.Printf("Subscribe Response: %v", reply)
+
+	go func() {
+		result, err = sc.stratumclient.Call("mining.authorize", []string{sc.User, sc.Password})
+		if err != nil {
+			log.Println("Unable to authorize:", err)
+			sc.stratumclient.Close()
+			return
+		}
+		log.Println("Authorization of", sc.User, ":", result)
+	}()
+
+	// go func() {
+
+	// 	for i := 0; i < 10000; i++ {
+	// 		log.Printf("Submitting")
+	// 		header := make([]byte, 140)
+	// 		a, err := rand.Read(header)
+	// 		if err != nil {
+	// 			panic(err)
+	// 		}
+	// 		log.Printf("bytes: %d", a)
+	// 		ntimeB := make([]byte, 4)
+	// 		rand.Read(ntimeB)
+	// 		sc.SubmitHeader(header, stratumJob{
+	// 			JobID: "dlux1",
+	// 			ExtraNonce2: stratum.ExtraNonce2{
+	// 				Value: 5,
+	// 				Size:  8,
+	// 			},
+	// 			NTime: ntimeB,
+	// 		})
+	// 		log.Printf("Submitting1")
+	// 	}
+	// }()
+
+	// result, err = sc.stratumclient.Call("mining.suggest_difficulty", []uint64{16777216})
+	// if err != nil {
+	// 	log.Println("Unable to suggest difficulty:", err)
+	// 	sc.stratumclient.Close()
+	// 	return
+	// }
+
+	// go func() {
+	// 	result, err = sc.stratumclient.Call("mining.set_extranonce", nil)
+	// 	if err != nil {
+	// 		log.Println("Unable to mining.set_extranonce:", err)
+	// 		sc.stratumclient.Close()
+	// 		return
+	// 	}
+	// 	log.Println("mining.set_extranonce")
+	// }()
+
+	// result, err = sc.stratumclient.Call("mining.multi_version", []int{2})
+	// if err != nil {
+	// 	log.Println("Unable to do mining.multi_version:", err)
+	// 	sc.stratumclient.Close()
+	// 	return
+	// }
+	// log.Printf("mining.multi_version result: %v", result)
+	//[["minimum-difficulty", "version-rolling"],{"minimum-difficulty.value": 2048,"version-rolling.mask": "1fffe000", "version-rolling.min-bit-count": 2}]}
+	// log.Printf("mining.configure send")
+	// multiVersionResult, err := sc.stratumclient.Call("mining.configure", []int{1})
+	// if err != nil {
+	// 	log.Printf("mining.multiversion error: %s", err)
+	// 	sc.stratumclient.Close()
+	// 	return
+	// }
+	// log.Printf("Result: %v", multiVersionResult)
+	// log.Printf("mining.multi_version send")
+	// multiVersionResult, err := sc.stratumclient.Call("mining.multi_version", []int{1})
+	// if err != nil {
+	// 	log.Printf("mining.multiversion error: %s", err)
+	// 	sc.stratumclient.Close()
+	// 	return
+	// }
+	// log.Printf("Result: %v", multiVersionResult)
+
+	// go func() {
+	// 	log.Printf("sending mining.suggest_difficulty")
+	// 	result, err = sc.stratumclient.Call("mining.suggest_difficulty", []float64{65536.00})
+	// 	if err != nil {
+	// 		log.Println("Unable to suggest:", err)
+	// 		sc.stratumclient.Close()
+	// 		return
+	// 	}
+	// 	log.Printf("mining.suggest_difficulty: %v", result)
+	// }()
 
 	// extranonce2Size, ok := reply[2].(float64)
 	// if !ok {
@@ -101,18 +209,14 @@ func (sc *StratumClient) Start() {
 	// 	return
 	// }
 	// sc.extranonce2Size = uint(extranonce2Size)
-	// log.Printf("Subscribe Extranonce2 Size: %d", sc.extranonce2Size)
 
 	//Authorize the miner
-	go func() {
-		result, err = sc.stratumclient.Call("mining.authorize", []string{sc.User, ""})
-		if err != nil {
-			log.Println("Unable to authorize:", err)
-			sc.stratumclient.Close()
-			return
-		}
-		log.Println("Authorization of", sc.User, ":", result)
-	}()
+	/**
+	{"method": "mining.configure",
+	 "id": 1,
+	 "params":
+	*/
+	//json.RawMessage(fmt.Sprintf("[[[\"mining.set_difficulty\",\"luxor%s\"],[\"mining.notify\",\"%s\"]], \"%s\", %d]"
 
 }
 
@@ -130,73 +234,84 @@ func (sc *StratumClient) subscribeToStratumDifficultyChanges() {
 		log.Println("Stratum server changed difficulty to", diff)
 		sc.setDifficulty(diff)
 	})
+	sc.stratumclient.SetNotificationHandler("mining.set_target", func(params []interface{}) {
+		log.Printf("TARGET set_target: %v", params)
+	})
 }
 
 func (sc *StratumClient) subscribeToStratumJobNotifications() {
 	sc.stratumclient.SetNotificationHandler("mining.notify", func(params []interface{}) {
-		log.Println("New job received from stratum server")
-
-		sj := stratumJob{}
-
-		sj.ExtraNonce2.Size = sc.extranonce2Size
-
-		var ok bool
-		var err error
-		log.Printf("Notify: %s", params)
-		if sj.JobID, ok = params[0].(string); !ok {
-			log.Println("ERROR Wrong job_id parameter supplied by stratum server")
-			return
-		}
-		if sj.PrevHash, err = stratum.HexStringToBytes(params[1]); err != nil {
-			log.Println("ERROR Wrong prevhash parameter supplied by stratum server")
-			return
-		}
-		if sj.Coinbase1, err = stratum.HexStringToBytes(params[2]); err != nil {
-			log.Println("ERROR Wrong coinb1 parameter supplied by stratum server")
-			return
-		}
-		log.Printf("Coinbase1: %s", params[2])
-
-		if sj.Coinbase2, err = stratum.HexStringToBytes(params[3]); err != nil {
-			log.Println("ERROR Wrong coinb2 parameter supplied by stratum server")
-			return
-		}
-		log.Printf("Coinbase2: %s", params[3])
-
-		//Convert the merklebranch parameter
-		//merklebranch, ok := params[4].([]interface{})
-		// if !ok {
-		// 	log.Println("ERROR Wrong merkle_branch parameter supplied by stratum server")
+		//log.Println("New job received from stratum server")
+		// if params == nil || len(params) < 9 {
 		// 	return
+		// 	log.Println("ERROR Wrong number of parameters supplied by stratum server")
 		// }
+		//log.Printf("Params: %v", params)
+
+		// sj := stratumJob{}
+
+		// sj.ExtraNonce2.Size = sc.extranonce2Size
+		// log.Printf("enonce2 %d", sc.extranonce2Size)
+
+		// log.Printf("Params: %v", params)
+		// var ok bool
+		// var err error
+		// if sj.JobID, ok = params[0].(string); !ok {
+		// 	log.Println("ERROR Wrong job_id parameter supplied by stratum server")
+		// 	//return
+		// }
+		// log.Printf("jobid: %s", sj.JobID)
+		// if sj.PrevHash, err = stratum.HexStringToBytes(params[1]); err != nil {
+		// 	log.Println("ERROR Wrong prevhash parameter supplied by stratum server")
+		// 	//return
+		// }
+		// log.Printf("PrevHash: %s", params[1])
+		// if sj.Coinbase1, err = stratum.HexStringToBytes(params[2]); err != nil {
+		// 	log.Println("ERROR Wrong coinb1 parameter supplied by stratum server")
+		// 	//return
+		// }
+		// log.Printf("Coinbase1: %s", params[2])
+		// if sj.Coinbase2, err = stratum.HexStringToBytes(params[3]); err != nil {
+		// 	log.Println("ERROR Wrong coinb2 parameter supplied by stratum server")
+		// 	//return
+		// }
+		// log.Printf("Coinbase2: %s", params[3])
+
+		// //Convert the merklebranch parameter
+		// merklebranch, ok := params[4].([]interface{})
+		// if !ok {
+		// 	log.Printf("ERROR Wrong merkle_branch parameter supplied by stratum server: %s", params[4])
+		// }
+		// log.Printf("merklebranch: %s", merklebranch)
+
 		// sj.MerkleBranch = make([][]byte, len(merklebranch), len(merklebranch))
 		// for i, branch := range merklebranch {
 		// 	if sj.MerkleBranch[i], err = stratum.HexStringToBytes(branch); err != nil {
-		// 		log.Println("ERROR Wrong merkle_branch parameter supplied by stratum server")
-		// 		return
+		// 		//log.Printf("ERROR Wrong merkle_branch parameter supplied by stratum server. %s", branch)
+		// 		//return
 		// 	}
 		// }
-		//		log.Printf("MerkleBranch: %s", merklebranch)
 
-		if sj.Version, ok = params[5].(string); !ok {
-			log.Println("ERROR Wrong version parameter supplied by stratum server")
-			return
-		}
-		log.Printf("Version: %s", sj.Version)
-		if sj.NBits, ok = params[6].(string); !ok {
-			log.Println("ERROR Wrong nbits parameter supplied by stratum server")
-			return
-		}
-		log.Printf("NBits: %s", sj.NBits)
-		if sj.NTime, err = stratum.HexStringToBytes(params[7]); err != nil {
-			log.Println("ERROR Wrong ntime parameter supplied by stratum server")
-			return
-		}
-		if sj.CleanJobs, ok = params[8].(bool); !ok {
-			log.Println("ERROR Wrong clean_jobs parameter supplied by stratum server")
-			return
-		}
-		sc.addNewStratumJob(sj)
+		// if sj.Version, ok = params[5].(string); !ok {
+		// 	//log.Println("ERROR Wrong version parameter supplied by stratum server")
+		// 	//return
+		// }
+		// log.Printf("Version: %s", sj.Version)
+		// if sj.NBits, ok = params[6].(string); !ok {
+		// 	//log.Println("ERROR Wrong nbits parameter supplied by stratum server")
+		// 	//return
+		// }
+		// log.Printf("NBits: %s", sj.NBits)
+		// if sj.NTime, err = stratum.HexStringToBytes(params[7]); err != nil {
+		// 	log.Println("ERROR Wrong ntime parameter supplied by stratum server")
+		// 	return
+		// }
+		// log.Printf("NTime: %s", params[7])
+		// if sj.CleanJobs, ok = params[8].(bool); !ok {
+		// 	log.Println("ERROR Wrong clean_jobs parameter supplied by stratum server")
+		// 	return
+		// }
+		//sc.addNewStratumJob(sj)
 	})
 }
 
@@ -300,16 +415,18 @@ func (sc *StratumClient) GetHeaderForWork() (target, header []byte, deprecationC
 //SubmitHeader reports a solution to the stratum server
 func (sc *StratumClient) SubmitHeader(header []byte, job interface{}) (err error) {
 	sj, _ := job.(stratumJob)
-	nonce := hex.EncodeToString(header[32:40])
+	nonce := hex.EncodeToString(header[32:36])
 	encodedExtraNonce2 := hex.EncodeToString(sj.ExtraNonce2.Bytes())
 	nTime := hex.EncodeToString(sj.NTime)
 	sc.mutex.Lock()
 	c := sc.stratumclient
 	sc.mutex.Unlock()
 	stratumUser := sc.User
+	log.Printf("StratumUser: %s. jobId %s. extraNonce2: %s. nTime: %s. nonce: %s", stratumUser, sj.JobID, encodedExtraNonce2, nTime, nonce)
 	_, err = c.Call("mining.submit", []string{stratumUser, sj.JobID, encodedExtraNonce2, nTime, nonce})
 	if err != nil {
 		return
 	}
+
 	return
 }

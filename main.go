@@ -4,14 +4,12 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"math"
 	"os"
 	"strconv"
 	"strings"
 
 	"github.com/robvanmieghem/go-opencl/cl"
 	"github.com/robvanmieghem/gominer/algorithms/sia"
-	"github.com/robvanmieghem/gominer/mining"
 )
 
 //Version is the released version string of gominer
@@ -38,7 +36,7 @@ func main() {
 	if *useCPU {
 		devicesTypesForMining = cl.DeviceTypeAll
 	}
-	globalItemSize := int(math.Exp2(float64(intensity)))
+	//globalItemSize := int(math.Exp2(float64(intensity)))
 
 	platforms, err := cl.GetPlatforms()
 	if err != nil {
@@ -73,39 +71,43 @@ func main() {
 		miningDevices[i] = device
 	}
 
-	nrOfMiningDevices := len(miningDevices)
-	var hashRateReportsChannel = make(chan *mining.HashRateReport, nrOfMiningDevices*10)
+	//nrOfMiningDevices := len(miningDevices)
+	// var hashRateReportsChannel = make(chan *mining.HashRateReport, nrOfMiningDevices*10)
 
-	var miner mining.Miner
+	//var miner mining.Miner
 	log.Println("Starting SIA mining")
 	c := sia.NewClient(*host, *pooluser)
 
-	miner = &sia.Miner{
-		ClDevices:       miningDevices,
-		HashRateReports: hashRateReportsChannel,
-		Intensity:       intensity,
-		GlobalItemSize:  globalItemSize,
-		Client:          c,
-	}
-	miner.Mine()
+	c.Start()
+
+	// miner = &sia.Miner{
+	// 	ClDevices:       miningDevices,
+	// 	HashRateReports: hashRateReportsChannel,
+	// 	Intensity:       intensity,
+	// 	GlobalItemSize:  globalItemSize,
+	// 	Client:          c,
+	// }
+	//miner.Mine()
 
 	//Start printing out the hashrates of the different gpu's
-	hashRateReports := make([]float64, nrOfMiningDevices)
-	for {
-		//No need to print at every hashreport, we have time
-		for i := 0; i < nrOfMiningDevices; i++ {
-			report := <-hashRateReportsChannel
-			hashRateReports[report.MinerID] = report.HashRate
-		}
-		fmt.Print("\r")
-		var totalHashRate float64
-		for minerID, hashrate := range hashRateReports {
-			fmt.Printf("%d-%.1f ", minerID, hashrate)
-			totalHashRate += hashrate
-		}
-		fmt.Printf("Total: %.1f MH/s  ", totalHashRate)
+	// hashRateReports := make([]float64, nrOfMiningDevices)
+	// for {
+	// 	//No need to print at every hashreport, we have time
+	// 	for i := 0; i < nrOfMiningDevices; i++ {
+	// 		report := <-hashRateReportsChannel
+	// 		hashRateReports[report.MinerID] = report.HashRate
+	// 	}
+	// 	fmt.Print("\r")
+	// 	var totalHashRate float64
+	// 	for minerID, hashrate := range hashRateReports {
+	// 		fmt.Printf("%d-%.1f ", minerID, hashrate)
+	// 		totalHashRate += hashrate
+	// 	}
+	// 	fmt.Printf("Total: %.1f MH/s  ", totalHashRate)
 
-	}
+	// }
+	signal := make(chan bool)
+	<-signal
 }
 
 //deviceExcludedForMining checks if the device is in the exclusion list
